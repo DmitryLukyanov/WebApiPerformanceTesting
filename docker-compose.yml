@@ -1,0 +1,33 @@
+# Local run: API + gateway with APIM-style subscription key auth (no Terraform/Azure).
+# Gateway requires header: Ocp-Apim-Subscription-Key: <SubscriptionKey>
+services:
+  loaddemo-api:
+    build:
+      context: ./src/LoadDemoApi
+      dockerfile: Dockerfile
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - SubscriptionKey=${SUBSCRIPTION_KEY:-dev-key}
+    networks:
+      - loaddemo
+
+  gateway:
+    build:
+      context: ./src/LoadDemoApi.Gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - SubscriptionKey=${SUBSCRIPTION_KEY:-dev-key}
+      # Backend URL: API container name and internal port
+      - ReverseProxy__Clusters__api__Destinations__api__Address=http://loaddemo-api:8080
+    depends_on:
+      - loaddemo-api
+    networks:
+      - loaddemo
+
+networks:
+  loaddemo:
+    driver: bridge
