@@ -1,0 +1,50 @@
+name: Load tests
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Start API and gateway
+        run: docker compose up -d --build
+
+      - name: Wait for gateway
+        run: |
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null -w "%{http_code}" -H "Ocp-Apim-Subscription-Key: dev-key" http://localhost:8080/api/load | grep -q "200"; then
+              echo "Gateway ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Gateway did not become ready"
+          exit 1
+
+      - name: Run NBomber load test
+        working-directory: tests/LoadDemoApi.LoadTests
+        env:
+          LOAD_BASE_URL: "http://localhost:8080"
+          APIM_SUBSCRIPTION_KEY: "dev-key"
+          LOAD_PROFILE: "low"
+        run: dotnet run -c Release
+
+      - name: Upload NBomber reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: nbomber-load-reports
+          path: tests/LoadDemoApi.LoadTests/nbomber_report/
+          retention-days: 30
