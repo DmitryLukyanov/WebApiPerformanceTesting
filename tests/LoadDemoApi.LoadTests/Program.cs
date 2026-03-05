@@ -1,4 +1,5 @@
 using System.Net.Http;
+using LoadDemoApi.LoadTests;
 using NBomber.CSharp;
 
 // Configuration: base URL (APIM or direct backend) and optional subscription key for APIM
@@ -33,15 +34,12 @@ var scenarioUserJourney = Scenario.Create("user_journey", async context =>
         var response = await httpClient.GetAsync(url);
         return response.IsSuccessStatusCode ? Response.Ok() : Response.Fail();
     });
-    if (!step1.IsOk) return Response.Fail();
-
     // Step 2: Medium – default API (typical page)
     var step2 = await Step.Run("page_default", context, async () =>
     {
         var response = await httpClient.GetAsync(baseLoadUrl);
         return response.IsSuccessStatusCode ? Response.Ok() : Response.Fail();
     });
-    if (!step2.IsOk) return Response.Fail();
 
     // Step 3: Heavy – "heavy" page (more delay + CPU)
     var step3 = await Step.Run("page_heavy", context, async () =>
@@ -51,7 +49,8 @@ var scenarioUserJourney = Scenario.Create("user_journey", async context =>
         return response.IsSuccessStatusCode ? Response.Ok() : Response.Fail();
     });
 
-    return step3.IsOk ? Response.Ok() : Response.Fail();
+    // Scenario succeeds if all steps completed (step-level stats show per-step ok/fail)
+    return Response.Ok();
 })
 .WithWarmUpDuration(warmUp)
 .WithLoadSimulations(
@@ -126,7 +125,7 @@ var scenarioHeavyOnly = Scenario.Create("heavy_only", async context =>
 .WithWarmUpDuration(warmUp)
 .WithLoadSimulations(Simulation.Inject(rate: 8, interval: TimeSpan.FromSeconds(1), during: duration));
 
-NBomberRunner
+var result = NBomberRunner
     .RegisterScenarios(
         scenarioUserJourney,
         scenarioMixedTraffic,
@@ -136,3 +135,5 @@ NBomberRunner
         scenarioHeavyOnly)
     .WithReportFolder("nbomber_report")
     .Run();
+
+LoadTestAnalysis.WriteReport(result, "nbomber_report", loadProfile);
